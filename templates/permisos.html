@@ -1,0 +1,28 @@
+{% extends 'app_base.html' %}
+
+{% block title %}Permisos{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+  <h1>Permisos</h1>
+  <p>Vista consolidada de permisos por módulo y su asignación actual a cada rol.</p>
+</section>
+
+<section class="panel-card">
+  <header class="panel-head">
+    <h2>Matriz de permisos</h2>
+    <button class="secondary-btn" id="permissions-refresh" type="button">Actualizar</button>
+  </header>
+  <div id="permissions-feedback" class="inline-feedback"></div>
+  <div class="table-wrapper">
+    <table id="permissions-matrix">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{{ url_for('static', filename='js/permissions.js') }}"></script>
+{% endblock %}

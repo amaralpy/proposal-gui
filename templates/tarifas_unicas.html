@@ -1,0 +1,88 @@
+{% extends 'app_base.html' %}
+
+{% block title %}Tarifas únicas{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+  <h1>Tarifas únicas</h1>
+  <p>ABM de servicios ocasionales con precio fijo.</p>
+</section>
+
+<section class="panel-card" data-fee-mode="unicas" data-can-manage="{{ 'true' if 'tarifas_unicas:manage' in current_user.permissions else 'false' }}" id="fees-module">
+  <header class="panel-head">
+    <h2>Listado</h2>
+    {% if 'tarifas_unicas:manage' in current_user.permissions %}
+    <button class="primary-btn" type="button" id="new-fee-btn">Nuevo servicio</button>
+    {% endif %}
+  </header>
+
+  <div id="fees-feedback" class="inline-feedback"></div>
+
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Servicio ID</th>
+          <th>Nombre</th>
+          <th>Precio ocasional</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="fees-table-body"></tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel-card">
+  <h2>Endpoints</h2>
+  <pre class="code-block">GET    /api/v1/services?pagina=1&amp;tamano_pagina=10&amp;tipo=occasional
+POST   /api/v1/services
+PUT    /api/v1/services/{service_id}
+DELETE /api/v1/services/{service_id}
+
+POST   /api/v1/services/{service_id}/prices/occasional
+PUT    /api/v1/services/{service_id}/prices/occasional
+DELETE /api/v1/services/{service_id}/prices/occasional</pre>
+</section>
+
+<dialog id="fee-dialog" class="fee-dialog">
+  <form id="fee-form" method="dialog" class="modal-form">
+    <h3 id="fee-dialog-title">Nuevo servicio</h3>
+    <input type="hidden" id="fee-action" />
+    <input type="hidden" id="fee-price-id" />
+
+    <label for="fee-id">Servicio ID</label>
+    <input id="fee-id" required />
+
+    <label for="fee-name">Nombre del servicio</label>
+    <input id="fee-name" required />
+
+    <fieldset id="occasional-price-fields">
+      <legend>Precio ocasional</legend>
+
+      <label for="fee-monthly-pyg">Precio mensual PYG</label>
+      <input id="fee-monthly-pyg" type="number" min="0" step="1" />
+
+      <label for="fee-monthly-usd">Precio mensual USD</label>
+      <input id="fee-monthly-usd" type="number" min="0" step="0.01" />
+
+      <label for="fee-yearly-pyg">Precio anual PYG</label>
+      <input id="fee-yearly-pyg" type="number" min="0" step="1" />
+
+      <label for="fee-yearly-usd">Precio anual USD</label>
+      <input id="fee-yearly-usd" type="number" min="0" step="0.01" />
+    </fieldset>
+
+    <p class="inline-feedback" id="fee-dialog-hint"></p>
+
+    <div class="modal-actions">
+      <button type="button" class="ghost-btn" id="cancel-fee-btn">Cancelar</button>
+      <button type="submit" class="primary-btn">Guardar</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{{ url_for('static', filename='js/tarifas.js') }}"></script>
+{% endblock %}

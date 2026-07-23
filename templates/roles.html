@@ -1,0 +1,26 @@
+{% extends 'app_base.html' %}
+
+{% block title %}Roles{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+  <h1>Roles</h1>
+  <p>Define que puede hacer cada rol dentro del sistema. Los cambios impactan sobre todos los usuarios que tengan ese rol.</p>
+</section>
+
+<section class="panel-card">
+  <header class="panel-head">
+    <h2>Configuración RBAC</h2>
+    <button class="secondary-btn" id="roles-refresh" type="button">Recargar</button>
+  </header>
+  <div id="roles-feedback" class="inline-feedback"></div>
+  <div id="roles-grid" class="role-editor-grid"></div>
+</section>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+  window.canManageRoles = {{ ('roles:manage' in current_user.permissions)|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/roles.js') }}"></script>
+{% endblock %}

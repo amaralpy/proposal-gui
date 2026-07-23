@@ -1,0 +1,229 @@
+{% extends 'app_base.html' %}
+
+{% block title %}Honorarios{% endblock %}
+
+{% block extra_head %}
+<link
+  href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css"
+  rel="stylesheet"
+/>
+{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+  <h1>Cotizador de honorarios</h1>
+  <p>Completa los datos y obtén una estimación dinámica.</p>
+</section>
+
+<section class="panel-card honorarios-page">
+  <div class="honorarios-grid">
+    <article class="honorarios-panel">
+      <header class="panel-head honorarios-panel-head">
+        <h2>Datos de cotización</h2>
+      </header>
+
+      <form id="prospect-form" class="honorarios-form" autocomplete="off" data-audit-max-distance="{{ audit_max_distance }}">
+        <div class="field full-width">
+          <label for="departamento">Departamento</label>
+          <select id="departamento" name="departamento" required>
+            <option value="">Selecciona una opción</option>
+            <option value="Outsourcing">Outsourcing</option>
+            <option value="Auditoria">Auditoría</option>
+          </select>
+        </div>
+
+        <section id="outsourcing-section" class="group-card hidden full-width">
+          <h3>Campos de Outsourcing</h3>
+
+          <div class="field">
+            <label for="servicios-recurrentes">Servicios recurrentes</label>
+            <select id="servicios-recurrentes" name="servicios_recurrentes" multiple></select>
+          </div>
+
+          <div class="field">
+            <label for="tramites">Trámites iniciales y ocasionales</label>
+            <select id="tramites" name="tramites" multiple></select>
+          </div>
+
+          <div class="field">
+            <label for="moneda">Moneda</label>
+            <select id="moneda" name="moneda">
+              <option value="USD">USD - Dólares</option>
+              <option value="PYG">PYG - Guaraníes</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="comprobantes">Cantidad de comprobantes mensuales</label>
+            <input
+              id="comprobantes"
+              type="number"
+              name="comprobantes_mensuales"
+              min="0"
+              value="20"
+              step="1"
+              placeholder="Ej: 120"
+            />
+          </div>
+
+          <div class="field toggle-field">
+            <label for="incluye-erp">Incluye ERP</label>
+            <label class="toggle-wrap" for="incluye-erp">
+              <input id="incluye-erp" type="checkbox" name="incluye_erp" />
+              <span class="toggle-pill" aria-hidden="true"></span>
+              <span class="toggle-label">No / Sí</span>
+            </label>
+          </div>
+
+          <div class="field toggle-field">
+            <label for="honorarios-detallados">Honorarios detallados</label>
+            <label class="toggle-wrap" for="honorarios-detallados">
+              <input id="honorarios-detallados" type="checkbox" name="honorarios_detallados" checked />
+              <span class="toggle-pill" aria-hidden="true"></span>
+              <span class="toggle-label">No / Sí</span>
+            </label>
+          </div>
+
+          <div class="field toggle-field">
+            <label for="obtener-lista-completa">Obtener lista completa</label>
+            <label class="toggle-wrap" for="obtener-lista-completa">
+              <input id="obtener-lista-completa" type="checkbox" name="table" />
+              <span class="toggle-pill" aria-hidden="true"></span>
+              <span class="toggle-label">No / Sí</span>
+            </label>
+          </div>
+        </section>
+
+        <section id="auditoria-section" class="group-card hidden full-width">
+          <h3>Campos de Auditoría</h3>
+
+          <div class="subgroup">
+            <h4>Datos del potencial cliente</h4>
+
+            <div class="field">
+              <label for="tipo-negocio">Rubro</label>
+              <select id="tipo-negocio" name="rubro">
+                <option value="">Selecciona una opción</option>
+                <option value="Agropecuario">Agropecuario</option>
+                <option value="Comercial">Comercial</option>
+                <option value="Financiero">Financiero</option>
+                <option value="Industrial">Industrial</option>
+                <option value="Inmobiliaria">Inmobiliaria</option>
+                <option value="Logistico">Logístico</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="facturacion-anual">Facturación anual (en millones)</label>
+              <input
+                id="facturacion-anual"
+                type="number"
+                step="0.01"
+                min="0"
+                name="facturacion_anual"
+                placeholder="Ej: 10"
+              />
+              <span class="field-note">Valor: <span id="facturacion-anual-note">0</span></span>
+            </div>
+
+            <div class="field">
+              <label for="activos-totales">Activos totales (en millones)</label>
+              <input
+                id="activos-totales"
+                type="number"
+                step="0.01"
+                min="0"
+                name="activos_totales"
+                placeholder="Ej: 80"
+              />
+              <span class="field-note">Valor: <span id="activos-totales-note">0</span></span>
+            </div>
+
+            <div class="field">
+              <label for="cantidad-empleados">Cantidad de empleados</label>
+              <input
+                id="cantidad-empleados"
+                type="number"
+                step="1"
+                min="0"
+                name="cantidad_empleados"
+                placeholder="Ej: 65"
+              />
+            </div>
+
+            <div class="field">
+              <label for="auditoria-moneda">Moneda</label>
+              <select id="auditoria-moneda" name="moneda">
+                <option value="PYG">PYG - Guaraníes</option>
+                <option value="USD">USD - Dólares</option>
+              </select>
+            </div>
+
+          </div>
+
+          <div class="subgroup">
+            <h4>Proyectos comparables utilizados</h4>
+
+            <div class="table-group full-width">
+              <label>Proyectos tomados en cuenta</label>
+              <p class="field-note">Selecciona los proyectos que quieres usar para recalcular. Si no hay ninguno seleccionado, no se enviará el cálculo.</p>
+              <div class="audit-projects-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Seleccionar</th>
+                      <th>Índice de similitud</th>
+                      <th>Cliente</th>
+                      <th>Tipo de negocio</th>
+                      <th>Fecha propuesta</th>
+                      <th>Cant. ejercicios</th>
+                      <th>Ejercicio</th>
+                      <th>Activo</th>
+                      <th>Ingreso</th>
+                      <th>Cant. empleados</th>
+                      <th>Honorarios</th>
+                      <th>Horas</th>
+                    </tr>
+                  </thead>
+                  <tbody id="proyectos-referencia-tbody">
+                    <tr>
+                      <td colspan="12">Completa los datos requeridos para consultar los proyectos comparables.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+      </form>
+    </article>
+
+    <aside class="honorarios-panel honorarios-preview-panel">
+      <header class="panel-head honorarios-panel-head">
+        <h2>Resumen</h2>
+        <div class="markdown-header-actions">
+        <button id="copy-result-btn" class="copy-btn" title="Copiar resultado">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copiar
+        </button>
+        <div class="total-chip">
+          <span>Total actual</span>
+          <strong id="total-output">0.00 USD</strong>
+        </div>
+        </div>
+      </header>
+
+      <article id="markdown-preview" class="markdown-preview">
+        <h2>Estimación de Honorarios</h2>
+        <p>Completa el formulario para ver el detalle.</p>
+      </article>
+    </aside>
+  </div>
+</section>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% endblock %}

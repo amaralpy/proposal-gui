@@ -1,0 +1,60 @@
+{% extends 'app_base.html' %}
+
+{% block title %}Usuarios{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+  <h1>Usuarios</h1>
+  <p>Administra el acceso interno: rol asignado, estado activo y último ingreso.</p>
+</section>
+
+<section class="stats-grid compact-grid">
+  <article class="stat-card">
+    <span class="material-symbols-outlined">group</span>
+    <strong id="users-count">0</strong>
+    <span>Total usuarios</span>
+  </article>
+  <article class="stat-card">
+    <span class="material-symbols-outlined">verified_user</span>
+    <strong id="active-users-count">0</strong>
+    <span>Usuarios activos</span>
+  </article>
+  <article class="stat-card">
+    <span class="material-symbols-outlined">shield</span>
+    <strong id="roles-count">{{ valid_roles|length }}</strong>
+    <span>Roles disponibles</span>
+  </article>
+</section>
+
+<section class="panel-card">
+  <header class="panel-head">
+    <h2>Matriz de usuarios</h2>
+    <button class="secondary-btn" id="users-refresh" type="button">Actualizar</button>
+  </header>
+  <div id="users-feedback" class="inline-feedback"></div>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Usuario</th>
+          <th>Nombre completo</th>
+          <th>Correo</th>
+          <th>Rol</th>
+          <th>Activo</th>
+          <th>Último login</th>
+          <th>Acción</th>
+        </tr>
+      </thead>
+      <tbody id="users-table-body"></tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+  window.currentUsername = "{{ current_user.username }}";
+  window.canManageUsers = {{ ('usuarios:manage' in current_user.permissions)|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/users.js') }}"></script>
+{% endblock %}

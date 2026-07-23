@@ -1,0 +1,74 @@
+{% extends 'app_base.html' %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+  <h1>Dashboard</h1>
+  <p>Accede a los módulos habilitados para tu rol y controla la operación desde un único punto.</p>
+</section>
+
+<section class="stats-grid">
+  <article class="stat-card">
+    <span class="material-symbols-outlined">badge</span>
+    <strong>{{ current_user.role }}</strong>
+    <span>Rol actual</span>
+  </article>
+  <article class="stat-card">
+    <span class="material-symbols-outlined">key</span>
+    <strong>{{ current_user.permissions|length }}</strong>
+    <span>Permisos activos</span>
+  </article>
+  <article class="stat-card">
+    <span class="material-symbols-outlined">shield_person</span>
+    <strong>{{ security_navigation_items|length }}</strong>
+    <span>Módulos de seguridad visibles</span>
+  </article>
+</section>
+
+<section class="kpi-grid">
+  <article class="kpi-card">
+    <span class="material-symbols-outlined">hub</span>
+    <h3>Accesos disponibles</h3>
+    <p>El menú lateral se filtra automáticamente según tus permisos RBAC.</p>
+  </article>
+  <article class="kpi-card">
+    <span class="material-symbols-outlined">admin_panel_settings</span>
+    <h3>Control centralizado</h3>
+    <p>Usuarios, roles y permisos ya se gestionan desde pantallas dedicadas.</p>
+  </article>
+  <article class="kpi-card">
+    <span class="material-symbols-outlined">lock_open</span>
+    <h3>Autorización aplicada</h3>
+    <p>Las rutas y APIs ahora validan permisos por acción, no solo por rol global.</p>
+  </article>
+</section>
+
+{% if security_navigation_items %}
+<section class="panel-card">
+  <header class="panel-head">
+    <h2>Accesos de seguridad</h2>
+  </header>
+  <div class="security-grid">
+    {% for item in security_navigation_items %}
+    <a class="security-shortcut" href="{{ item.url }}">
+      <span class="material-symbols-outlined">{{ item.icon }}</span>
+      <strong>{{ item.label }}</strong>
+      <span>Ir al módulo</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="panel-card">
+  <header class="panel-head">
+    <h2>Permisos efectivos</h2>
+  </header>
+  <div class="badge-list">
+    {% for permission in current_user.permissions %}
+    <span class="permission-badge">{{ permission }}</span>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
