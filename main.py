@@ -6,11 +6,13 @@ import os
 from datetime import timedelta
 from functools import wraps
 from statistics import mean
+from time import perf_counter
 from urllib import error, parse, request as urllib_request
 
 from flask import (
     Flask,
     flash,
+    g,
     jsonify,
     redirect,
     render_template,
@@ -19,6 +21,10 @@ from flask import (
     url_for,
 )
 from ldap3 import Connection, Server
+
+from logging_setup import configure_logging
+
+configure_logging()
 
 from db import (
     PERMISSION_DEFINITIONS,
@@ -42,7 +48,8 @@ from db import (
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "prospect-gui-dev-secret")
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
-app.logger.setLevel(logging.DEBUG)
+
+logger = logging.getLogger(__name__)
 
 REST_API_BASE_URL = os.getenv("REST_API_BASE_URL", "http://localhost:3000")
 QUOTATIONS_CALCULATE_URL = os.getenv(
@@ -72,6 +79,13 @@ DEFAULT_ROLE = os.getenv("DEFAULT_ROLE", "viewer")
 _USERS_TABLE_READY = False
 
 PYG_PER_USD = 8000
+
+logger.info(
+    "Aplicacion iniciada. ldap_enabled=%s rest_api_base=%s quotations_url=%s",
+    LDAP_ENABLED,
+    REST_API_BASE_URL,
+    QUOTATIONS_CALCULATE_URL,
+)
 
 PRIMARY_NAV_ITEMS = (
     {
@@ -169,6 +183,12 @@ def _first_accessible_endpoint() -> str:
 
 def _forbidden(api: bool = False):
     message = "No tienes permisos para acceder a esta seccion."
+    logger.warning(
+        "Acceso denegado. user=%s path=%s api=%s",
+        session.get("username"),
+        request.path,
+        api,
+    )
     if api:
         return jsonify({"error": message}), 403
 
@@ -196,6 +216,7 @@ def _refresh_session_access() -> None:
     _ensure_user_store_once()
     user = get_internal_user(username)
     if not user or not user.get("is_active", True):
+        logger.warning("Sesion invalidada para usuario=%s. usuario no encontrado o inactivo.", username)
         session.clear()
         return
 
@@ -206,6 +227,48 @@ def _refresh_session_access() -> None:
 
     session["role"] = role
     session["permissions"] = effective_permissions
+    logger.debug(
+        "Sesion actualizada para usuario=%s role=%s permisos=%s",
+        username,
+        role,
+        len(effective_permissions),
+    )
+
+
+@app.before_request
+def log_request_start() -> None:
+    g.request_started_at = perf_counter()
+    if request.path.startswith("/static/"):
+        return
+
+    logger.info(
+        "REQUEST start method=%s path=%s ip=%s user=%s",
+        request.method,
+        request.path,
+        request.remote_addr,
+        session.get("username"),
+    )
+
+
+@app.after_request
+def log_request_end(response):
+    if request.path.startswith("/static/"):
+        return response
+
+    elapsed_ms = 0.0
+    started_at = getattr(g, "request_started_at", None)
+    if started_at is not None:
+        elapsed_ms = (perf_counter() - started_at) * 1000
+
+    logger.info(
+        "REQUEST end method=%s path=%s status=%s elapsed_ms=%.2f user=%s",
+        request.method,
+        request.path,
+        response.status_code,
+        elapsed_ms,
+        session.get("username"),
+    )
+    return response
 
 
 @app.before_request
@@ -236,6 +299,7 @@ def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
         if not _is_authenticated():
+            logger.debug("Intento de acceso sin sesion. path=%s", request.path)
             return redirect(url_for("login"))
         return view(*args, **kwargs)
 
@@ -378,6 +442,14 @@ def _proxy_to_rest(
     query = f"?{parse.urlencode(query_params)}" if query_params else ""
     url = f"{REST_API_BASE_URL}{path}{query}"
 
+    logger.debug(
+        "Proxy REST request method=%s path=%s query=%s payload_keys=%s",
+        method,
+        path,
+        bool(query_params),
+        sorted(payload.keys()) if isinstance(payload, dict) else [],
+    )
+
     body = json.dumps(payload).encode("utf-8") if payload is not None else None
     req = urllib_request.Request(
         url,
@@ -390,8 +462,20 @@ def _proxy_to_rest(
         with urllib_request.urlopen(req, timeout=20) as upstream_response:
             raw = upstream_response.read().decode("utf-8")
             data = json.loads(raw) if raw else {}
+            logger.info(
+                "Proxy REST ok method=%s path=%s status=%s",
+                method,
+                path,
+                upstream_response.status,
+            )
             return jsonify(data), upstream_response.status
     except error.HTTPError as http_error:
+        logger.warning(
+            "Proxy REST HTTPError method=%s path=%s status=%s",
+            method,
+            path,
+            http_error.code,
+        )
         raw_body = http_error.read().decode("utf-8") if http_error.fp else ""
         try:
             parsed_error = json.loads(raw_body) if raw_body else {}
@@ -399,6 +483,7 @@ def _proxy_to_rest(
             parsed_error = {"error": raw_body or "Error en servicio REST."}
         return jsonify(parsed_error), http_error.code
     except (error.URLError, TimeoutError):
+        logger.exception("Proxy REST fallo de conexion method=%s path=%s url=%s", method, path, url)
         return jsonify({"error": "No se pudo conectar con el servicio REST."}), 503
 
 
@@ -406,8 +491,15 @@ def _ensure_user_store_once() -> None:
     global _USERS_TABLE_READY
     if _USERS_TABLE_READY:
         return
-    ensure_user_table()
-    _USERS_TABLE_READY = True
+
+    logger.info("Inicializando tablas internas de usuarios/RBAC.")
+    try:
+        ensure_user_table()
+        _USERS_TABLE_READY = True
+        logger.info("Tablas internas listas.")
+    except Exception:
+        logger.exception("No se pudo inicializar el almacenamiento de usuarios.")
+        raise
 
 
 def _to_float(value: object, default: float = 0.0) -> float:
@@ -550,6 +642,7 @@ def login() -> str:
 
     if request.method == "GET":
         if _is_authenticated():
+            logger.info("Usuario ya autenticado redirigido a dashboard. user=%s", session.get("username"))
             return redirect(url_for("dashboard"))
         remembered_username = request.cookies.get("remembered_username", "")
         return render_template(
@@ -569,6 +662,7 @@ def login() -> str:
 
     is_valid, message, ldap_profile = _ldap_authenticate(username, password)
     if not is_valid:
+        logger.warning("Login fallido para usuario=%s", username)
         flash(message or "Credenciales invalidas.", "error")
         return (
             render_template(
@@ -592,6 +686,7 @@ def login() -> str:
 
         touch_user_login(username)
     except PricingConfigError as db_error:
+        logger.exception("Error de base de datos durante login para usuario=%s", username)
         flash(str(db_error), "error")
         return (
             render_template(
@@ -602,7 +697,7 @@ def login() -> str:
             503,
         )
 
-    app.logger.debug("Usuario de bd autenticado: %r", user)
+    logger.info("Login exitoso para usuario=%s role=%s", user["username"], user["role"])
 
     session.permanent = remember_me
     session["username"] = user["username"]
@@ -627,6 +722,7 @@ def login() -> str:
 
 @app.post("/logout")
 def logout() -> str:
+    logger.info("Logout usuario=%s", session.get("username"))
     session.clear()
     return redirect(url_for("login"))
 
@@ -683,8 +779,10 @@ def outsourcing_options() -> tuple:
     try:
         pricing_data = load_pricing_data()
     except PricingConfigError as error:
+        logger.warning("No se pudo cargar pricing data: %s", error)
         return jsonify({"error": str(error)}), 503
 
+    logger.debug("Opciones de outsourcing retornadas para usuario=%s", session.get("username"))
     return jsonify(_build_outsourcing_options(pricing_data)), 200
 
 
@@ -692,6 +790,11 @@ def outsourcing_options() -> tuple:
 @permission_required("honorarios:calculate", api=True)
 def calculate() -> tuple:
     payload = request.get_json(silent=True) or {}
+    logger.info(
+        "Solicitud de calculo recibida user=%s type=%s",
+        session.get("username"),
+        payload.get("type") if isinstance(payload, dict) else None,
+    )
 
     if isinstance(payload, dict) and payload.get("type") == "AUDIT-A":
         payload["distancia_maxima"] = AUDIT_MAX_DISTANCE
@@ -706,8 +809,10 @@ def calculate() -> tuple:
         with urllib_request.urlopen(req, timeout=12) as upstream_response:
             body = upstream_response.read().decode("utf-8")
             data = json.loads(body) if body else {}
+            logger.info("Calculo externo exitoso status=%s", upstream_response.status)
             return jsonify(data), upstream_response.status
     except error.HTTPError as http_error:
+        logger.warning("Servicio de calculo devolvio HTTP %s", http_error.code)
         raw_body = http_error.read().decode("utf-8") if http_error.fp else ""
         try:
             upstream_error = json.loads(raw_body) if raw_body else {}
@@ -725,6 +830,7 @@ def calculate() -> tuple:
             http_error.code,
         )
     except (error.URLError, TimeoutError, json.JSONDecodeError):
+        logger.exception("No se pudo conectar al servicio de calculo externo.")
         return jsonify({"error": "No se pudo conectar al servicio de calculo."}), 503
 
 
@@ -762,7 +868,16 @@ def patch_user_role(username: str) -> tuple:
 
     changed = update_user_role(username=username, role=role, is_active=is_active)
     if not changed:
+        logger.warning("No se encontro usuario para actualizar rol. target=%s", username)
         return jsonify({"error": "Usuario no encontrado."}), 404
+
+    logger.info(
+        "Rol de usuario actualizado por user=%s target=%s role=%s is_active=%s",
+        session.get("username"),
+        username,
+        role,
+        is_active,
+    )
 
     return jsonify({"ok": True, "username": username, "role": role, "is_active": is_active}), 200
 
@@ -785,10 +900,18 @@ def put_role_permissions(role: str) -> tuple:
         return jsonify({"error": "La lista de permisos es invalida."}), 400
 
     if not update_role_permissions(role, permissions):
+        logger.warning("Rol no encontrado para actualizar permisos. role=%s", role)
         return jsonify({"error": "Rol no encontrado."}), 404
 
     if session.get("role") == role:
         session["permissions"] = list_role_permissions(role)
+
+    logger.info(
+        "Permisos de rol actualizados por user=%s role=%s cantidad=%s",
+        session.get("username"),
+        role,
+        len(permissions),
+    )
 
     return jsonify({"ok": True, "role": role, "permissions": list_role_permissions(role)}), 200
 
@@ -914,5 +1037,6 @@ def occasional_service_price(service_id: str) -> tuple:
 
 
 if __name__ == "__main__":
+    logger.info("Inicio de aplicacion en modo local.")
     ensure_user_table()
     app.run(debug=True)

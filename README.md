@@ -28,6 +28,20 @@ Crear `.env` desde `.env.example` y definir:
 - `LDAP_BIND_PASSWORD`: opcional, contrasena del usuario tecnico.
 - `DEFAULT_ROLE`: rol inicial local para usuarios nuevos (`admin|manager|analyst|viewer`).
 
+### Logging con rotacion
+
+La aplicacion genera logs rotativos en archivos para monitoreo de flujo normal y errores:
+
+- `logs/app.log`: eventos generales (info, warning, error).
+- `logs/error.log`: solo errores (error, exception).
+
+Variables opcionales:
+
+- `LOG_DIR`: directorio de logs (default `logs`).
+- `LOG_LEVEL`: nivel base (`DEBUG`, `INFO`, `WARNING`, etc; default `INFO`).
+- `LOG_MAX_BYTES`: tamano maximo por archivo antes de rotar (default `5242880`, 5 MB).
+- `LOG_BACKUP_COUNT`: cantidad de archivos historicos por rotacion (default `10`).
+
 ## PostgreSQL
 
 Tablas usadas por la app:

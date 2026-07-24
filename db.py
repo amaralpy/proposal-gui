@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+import logging
 import os
 from typing import Any
 
@@ -10,6 +11,8 @@ import psycopg
 from psycopg import sql
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 class PricingConfigError(RuntimeError):
@@ -274,13 +277,19 @@ def resolve_recurring_price(
 def _get_connection() -> psycopg.Connection[object]:
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
+        logger.error("DATABASE_URL no configurada para conexion a PostgreSQL.")
         raise PricingConfigError(
             "DATABASE_URL no esta configurada. Define la conexion PostgreSQL en .env."
         )
-    return psycopg.connect(database_url)
+    try:
+        return psycopg.connect(database_url)
+    except Exception:
+        logger.exception("No se pudo establecer conexion a PostgreSQL.")
+        raise
 
 
 def ensure_user_table() -> None:
+    logger.info("Creando/verificando tablas internas app_users y RBAC.")
     ddl = """
     CREATE TABLE IF NOT EXISTS app_users (
         username TEXT PRIMARY KEY,
@@ -330,6 +339,7 @@ def ensure_user_table() -> None:
             cursor.execute(role_permissions_ddl)
         _seed_rbac_catalog(connection)
         connection.commit()
+    logger.info("Tablas internas y catalogo RBAC listos.")
 
 
 def list_role_permissions(role: str) -> list[str]:
@@ -344,6 +354,8 @@ def list_role_permissions(role: str) -> list[str]:
         with connection.cursor() as cursor:
             cursor.execute(query, (role,))
             rows = cursor.fetchall()
+
+    logger.debug("Permisos consultados para role=%s cantidad=%s", role, len(rows))
 
     return [row[0] for row in rows]
 
@@ -405,14 +417,22 @@ def list_permissions() -> list[dict[str, str]]:
 
 def update_role_permissions(role: str, permissions: list[str]) -> bool:
     if role not in VALID_ROLES:
+        logger.warning("Intento de actualizar permisos con rol invalido: %s", role)
         raise ValueError("Rol no permitido.")
 
     normalized_permissions = sorted({permission for permission in permissions if permission in VALID_PERMISSIONS})
+    logger.info(
+        "Actualizando permisos de rol role=%s solicitados=%s aplicados=%s",
+        role,
+        len(permissions),
+        len(normalized_permissions),
+    )
 
     with _get_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1 FROM app_roles WHERE code = %s", (role,))
             if not cursor.fetchone():
+                logger.warning("Rol no encontrado en BD al actualizar permisos: %s", role)
                 return False
 
             cursor.execute("DELETE FROM app_role_permissions WHERE role_code = %s", (role,))
@@ -426,6 +446,9 @@ def update_role_permissions(role: str, permissions: list[str]) -> bool:
                     [(role, permission) for permission in normalized_permissions],
                 )
         connection.commit()
+
+    logger.info("Permisos de rol actualizados correctamente role=%s", role)
+    return True
 
 
 def get_or_create_user(
@@ -456,7 +479,10 @@ def get_or_create_user(
         connection.commit()
 
     if not row:
+        logger.error("No se pudo crear u obtener usuario interno username=%s", username)
         raise PricingConfigError("No se pudo crear u obtener el usuario interno.")
+
+    logger.info("Usuario interno cargado/creado username=%s role=%s", row[0], row[3])
 
     return {
         "username": row[0],
@@ -483,6 +509,7 @@ def get_internal_user(username: str) -> dict[str, Any] | None:
             row = cursor.fetchone()
 
     if not row:
+        logger.debug("Usuario interno no encontrado username=%s", username)
         return None
 
     return {
@@ -509,6 +536,7 @@ def touch_user_login(username: str) -> None:
         with connection.cursor() as cursor:
             cursor.execute(query, (username,))
         connection.commit()
+    logger.debug("Actualizado ultimo login de usuario=%s", username)
 
 
 def list_internal_users() -> list[dict[str, Any]]:
@@ -540,6 +568,7 @@ def list_internal_users() -> list[dict[str, Any]]:
 
 def update_user_role(username: str, role: str, is_active: bool | None = None) -> bool:
     if role not in VALID_ROLES:
+        logger.warning("Intento de actualizar usuario con rol invalido role=%s username=%s", role, username)
         raise ValueError("Rol no permitido.")
 
     if is_active is None:
@@ -566,6 +595,14 @@ def update_user_role(username: str, role: str, is_active: bool | None = None) ->
             affected = cursor.rowcount
         connection.commit()
 
+    logger.info(
+        "Actualizacion de usuario completada username=%s role=%s is_active=%s affected=%s",
+        username,
+        role,
+        is_active,
+        affected,
+    )
+
     return bool(affected)
 
 
@@ -578,9 +615,17 @@ def load_pricing_data() -> PricingData:
         occasional_prices = _load_occasional_prices(connection)
 
     if not service_types:
+        logger.warning("No se encontraron servicios en tabla public.services.")
         raise PricingConfigError(
             "No se encontraron servicios en PostgreSQL. Revisa la tabla public.services."
         )
+
+    logger.info(
+        "Pricing data cargada servicios=%s recurrentes=%s ocasionales=%s",
+        len(service_types),
+        len(recurring_price_ranges),
+        len(occasional_prices),
+    )
 
     return PricingData(
         recurring_price_ranges=recurring_price_ranges,
